@@ -1,0 +1,46 @@
+---
+- name: Install SAS tools with architecture awareness
+  hosts: all
+  become: true
+  vars:
+    sas_tools:
+      - dnsupdate
+      - vasclnt
+      - vassc
+
+  tasks:
+
+    - name: Set architecture suffix for RHEL
+      set_fact:
+        arch_suffix: "{{ 'x86_64' if ansible_architecture == 'x86_64' else 'aarch64' }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Set architecture suffix for Debian
+      set_fact:
+        arch_suffix: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' }}"
+      when: ansible_os_family == "Debian"
+
+    - name: Copy and install RPM packages on RHEL-based systems
+      block:
+        - name: Copy {{ item }} RPM for {{ arch_suffix }}
+          copy:
+            src: "files/{{ item }}-{{ arch_suffix }}.rpm"
+            dest: "/tmp/{{ item }}.rpm"
+        - name: Install {{ item }} RPM
+          yum:
+            name: "/tmp/{{ item }}.rpm"
+            state: present
+      loop: "{{ sas_tools }}"
+      when: ansible_os_family == "RedHat"
+
+    - name: Copy and install DEB packages on Debian-based systems
+      block:
+        - name: Copy {{ item }} DEB for {{ arch_suffix }}
+          copy:
+            src: "files/{{ item }}-{{ arch_suffix }}.deb"
+            dest: "/tmp/{{ item }}.deb"
+        - name: Install {{ item }} DEB
+          apt:
+            deb: "/tmp/{{ item }}.deb"
+      loop: "{{ sas_tools }}"
+      when: ansible_os_family == "Debian"
